@@ -5,20 +5,19 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
 
 import com.lalala.aop.AuthenticationContext;
-import com.lalala.aop.PassportAspect;
-import com.lalala.config.CommonModuleConfig;
-import com.lalala.config.KafkaConsumerConfig;
-import com.lalala.config.KafkaProducerConfig;
+import com.lalala.mvc.aop.PassportAspect;
+import com.lalala.mvc.config.CommonMvcModuleConfig;
+
 
 @Import({
-        CommonModuleConfig.class,
-        AuthenticationContext.class,
-        PassportAspect.class,
+		CommonMvcModuleConfig.class,
+		AuthenticationContext.class,
+		PassportAspect.class,
 })
 @SpringBootApplication
 public class ChattingApplication {
 
-    public static void main(String[] args) {
-        SpringApplication.run(ChattingApplication.class, args);
-    }
+	public static void main(String[] args) {
+		SpringApplication.run(ChattingApplication.class, args);
+	}
 }

@@ -3,6 +3,7 @@ package com.lalala.auth.service;
 import com.lalala.auth.domain.Status;
 import com.lalala.auth.config.jwt.JwtUtils;
 import com.lalala.auth.payload.request.SignInRequest;
+import com.lalala.auth.payload.request.TokenRefreshRequest;
 import com.lalala.auth.payload.response.UserAndTokenResponse;
 import com.lalala.auth.repository.AuthRepository;
 import com.lalala.exception.BusinessException;
@@ -34,6 +35,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
     private final PassportGenerator passportGenerator;
+    private final RedisService redisService;
 
     @Transactional
     public ResponseEntity<UserAndTokenResponse> signIn(SignInRequest request) {
@@ -44,9 +46,12 @@ public class AuthService {
             throw new BusinessException(ErrorCode.LOGIN_FAILED);
         }
 
-        ResponseCookie jwtAccessCookie = jwtUtils.generateAccessJwtCookie(user);
+        String jwtAccess = jwtUtils.generateAccessJwt(user);
+        ResponseCookie jwtAccessCookie = jwtUtils.generateAccessJwtCookie(jwtAccess);
+
 
         String refreshToken = jwtUtils.generateRefreshToken(String.valueOf(user.getId()));
+
         ResponseCookie jwtRefreshCookie = jwtUtils.generateRefreshJwtCookie(refreshToken);
 
         user.changeLastAccess(LocalDateTime.now());
@@ -59,7 +64,7 @@ public class AuthService {
                         UserAndTokenResponse.builder()
                                 .id(user.getId())
                                 .nickname(user.getNickname())
-                                .access_token(jwtAccessCookie.toString())
+                                .access_token(jwtAccess)
                                 .refresh_token(refreshToken)
                                 .build());
     }
@@ -98,5 +103,32 @@ public class AuthService {
                         user.getUpdatedAt().toString()
                 )
         );
+    }
+
+    @Transactional
+    public ResponseEntity<UserAndTokenResponse> accessTokenRefresh(TokenRefreshRequest request) {
+
+        String userId = jwtUtils.getIdFromToken(request.accessToken());
+
+        User user = authRepository.findById(Long.parseLong(userId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        if (!redisService.isExistKey(userId)) {
+            throw new BusinessException(ErrorCode.INVALID_TOKEN);
+        }
+
+
+        String jwtAccess = jwtUtils.generateAccessJwt(user);
+        ResponseCookie jwtAccessCookie = jwtUtils.generateAccessJwtCookie(jwtAccess);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, jwtAccessCookie.toString())
+                .body(
+                        UserAndTokenResponse.builder()
+                                .id(user.getId())
+                                .nickname(user.getNickname())
+                                .access_token(jwtAccess)
+                                .refresh_token(request.refreshToken())
+                                .build());
     }
 }

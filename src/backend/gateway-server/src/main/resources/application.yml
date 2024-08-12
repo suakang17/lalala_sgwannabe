@@ -1,5 +1,7 @@
 server:
   port: 34000
+  netty:
+    worker-count: 2
 
 spring:
   application:
@@ -10,10 +12,14 @@ spring:
 
   cloud:
     gateway:
+      discovery:
+        locator:
+          enabled: true
+
       globalcors:
         cors-configurations:
           '[/**]':
-            allowedOrigins: [ "http://localhost:3000", "http://127.0.0.1:3000" ]
+            allowedOrigins: 'http://localhost:3000'
             allow-credentials: true
             allowedHeaders: '*'
             allowedMethods:
@@ -22,6 +28,14 @@ spring:
               - POST
               - DELETE
               - OPTIONS
+
+      default-filters:
+        - name: AuthorizationFilter
+          args:
+            baseMessage: Gateway Authorization Filter
+            preLogger: true
+            postLogger: true
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
       routes:
         - id: ALARM-SERVICE
           uri: lb://ALARM-SERVER
@@ -47,16 +61,23 @@ spring:
         - id: CHATTING-SERVICE-API
           uri: lb://CHATTING-SERVER
           predicates:
-            - Path=/chatting/v1/api/
+            - Path=/chatting/chat/**, /chatting/rooms/**
           filters:
-            - RewritePath=/chatting/v1/api/(?<segment>/?.*), /v1/api/$\{segment}
+            - RewritePath=/chatting/(?<segment>/?.*), /v1/api/${segment}
+
+        - id: CHATTING-SERVICE-SOCKJS
+          uri: lb://CHATTING-SERVER
+          predicates:
+            - Path=/chatting/ws-chat/info/**
+          filters:
+            - RewritePath=/chatting/(?<segment>/?.*), /${segment}
 
         - id: CHATTING-SERVICE-STOMP
           uri: lb:ws://CHATTING-SERVER
           predicates:
-            - Path=/chatting/**
+            - Path=/chatting/ws-chat/**
           filters:
-            - RewritePath=/chatting/(?<segment>/?.*), /$\{segment}
+            - RewritePath=/chatting/(?<segment>/?.*), /${segment}
 
         - id: FEED
           uri: lb://FEED-SERVER
@@ -86,13 +107,6 @@ spring:
           filters:
             - RewritePath=/search/?(?<segment>.*), /v1/api/$\{segment}
 
-        - id: STREAMING
-          uri: lb:ws://STREAMING-SERVER
-          predicates:
-            - Path=/streaming/**
-          filters:
-            - RewritePath=/streaming/?(?<segment>.*), /v1/ws/streaming/$\{segment}
-
         - id: USER
           uri: lb://USER-SERVER
           predicates:
@@ -100,12 +114,11 @@ spring:
           filters:
             - RewritePath=/user/?(?<segment>.*), /v1/api/$\{segment}
 
-      default-filters:
-        - name: AuthorizationFilter
-          args:
-            baseMessage: Gateway Authorization Filter
-            preLogger: true
-            postLogger: true
+      websockets:
+        enabled: true
+
+auth:
+  url: http://localhost:10000
 
 feign:
   client:

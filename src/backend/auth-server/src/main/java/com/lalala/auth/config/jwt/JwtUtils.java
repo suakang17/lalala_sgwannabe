@@ -1,5 +1,8 @@
 package com.lalala.auth.config.jwt;
 
+import com.lalala.exception.BusinessException;
+import com.lalala.exception.ErrorCode;
+import io.jsonwebtoken.ExpiredJwtException;
 import java.time.Duration;
 import java.util.Date;
 import java.util.UUID;
@@ -52,9 +55,14 @@ public class JwtUtils {
         return Keys.hmacShaKeyFor(Decoders.BASE64URL.decode(secretKey));
     }
 
-    /** 클라이언트 http cookie 관리 */
-    public ResponseCookie generateAccessJwtCookie(User user) {
-        String jwt = generateAccessTokenFromId(String.valueOf(user.getId()));
+    /**
+     * 클라이언트 http cookie 관리
+     */
+    public String generateAccessJwt(User user) {
+        return generateAccessTokenFromId(String.valueOf(user.getId()));
+    }
+
+    public ResponseCookie generateAccessJwtCookie(String jwt) {
         return generateCookie(jwtAccessCookie, jwt, "/");
     }
 
@@ -105,19 +113,23 @@ public class JwtUtils {
     }
 
     public ResponseCookie getCleanAccessJwtCookie() {
-        return ResponseCookie.from(jwtAccessCookie, null).path("/v1").build();
+        return ResponseCookie.from(jwtAccessCookie, null).path("/").build();
     }
 
     public ResponseCookie getCleanRefreshJwtCookie() {
-        return ResponseCookie.from(jwtRefreshCookie, null).path("/v1/api").build();
+        return ResponseCookie.from(jwtRefreshCookie, null).path("/").build();
     }
 
     public String getIdFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(key())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
+        try {
+            return Jwts.parser()
+                    .verifyWith(key())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getSubject();
+        } catch (ExpiredJwtException exception) {
+            throw new BusinessException(ErrorCode.JWT_TOKEN_EXPIRED);
+        }
     }
 }

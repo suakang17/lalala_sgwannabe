@@ -58,11 +58,13 @@ public class RoomService {
                     .build();
 
             myRoomsDto.add(JoinedRoomResponseDto.builder()
-                    .roomId(roomId)
+                    .id(roomId)
                     .roomName(room.getRoomName())
-                    .thumbnailImage(room.getThumbnailImage())
+                    .userCount(room.getUsers().size())
                     .users(room.getUsers())
                     .playlistOwner(entityToResponseDtoConverter.convertUser(room.getPlaylistOwner()))
+                    .playlist(room.getPlaylist())
+                    .thumbnailImage(room.getThumbnailImage())
                     .lastMessage(lastMessage)
                     .build());
         }
@@ -72,9 +74,7 @@ public class RoomService {
 
     public List<RoomResponseDto> findUnjoinedRooms(Long uid) {
 
-        List<Room> unjoinedRooms =
-                roomRepository.findUnjoinedRoomsSortedByCreationDate(
-                        uid, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Room> unjoinedRooms = roomRepository.findUnjoinedRoomsSortedByCreationDate(uid, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         log.info("참여하지 않은 방 리스트 조회 성공 uid={}", uid);
 
@@ -91,8 +91,10 @@ public class RoomService {
                 .collect(Collectors.toList());
     }
 
+
     public RoomResponseDto create(RoomCreateRequestDto roomCreateRequestDto) {
         // user build
+        log.info("roomCreateRequestDto={}", roomCreateRequestDto);
         User owner = User.builder()
                 .uid(roomCreateRequestDto.getUid())
                 .nickName(roomCreateRequestDto.getNickName())
@@ -107,9 +109,11 @@ public class RoomService {
         Room room = Room.builder()
                 .roomName(roomCreateRequestDto.getPlaylist().getName())
                 .playlist(roomCreateRequestDto.getPlaylist())
+                .playlistDuration(roomCreateRequestDto.getPlaylist().getTotalPlaylistTime())
                 .thumbnailImage(roomCreateRequestDto.getThumbnailImage())
                 .playlistOwner(owner)
                 .users(users)
+                .createdAt(LocalDateTime.now())
                 .build();
 
         log.info("생성된 방에 생성자 추가 성공 user={}", room.getUsers().toString());

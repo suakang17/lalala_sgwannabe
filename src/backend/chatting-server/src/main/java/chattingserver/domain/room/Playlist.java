@@ -1,8 +1,9 @@
 package chattingserver.domain.room;
 
-import java.util.List;
-
 import lombok.*;
+
+import java.time.Duration;
+import java.util.List;
 
 @Getter
 @ToString
@@ -30,4 +31,13 @@ public class Playlist {
                 .profileImage(playlistOwnerProfileImage)
                 .build();
     }
+
+
+    public Duration getTotalPlaylistTime() {
+        return this.getMusics().stream()
+                .map(Music::getPlayTimeDuration)
+                .reduce(Duration.ZERO, Duration::plus);
+    }
+
+
 }

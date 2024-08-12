@@ -3,8 +3,9 @@ services:
   gateway-app:
     image: smilegatewannabe/gateway
     environment:
-      eureka.instance.hostname: discovery-app
+      eureka.instance.hostname: gateway-app
       eureka.client.service-url.defaultZone: http://discovery-app:34100/eureka
+      auth.url: http://auth-app:10000
     restart: always
     ports:
       - 34000:34000

@@ -1,11 +1,10 @@
 package chattingserver.dto;
 
-import java.time.LocalDateTime;
-
-import lombok.*;
-
 import chattingserver.util.constant.MessageType;
 import jakarta.validation.constraints.NotBlank;
+import lombok.*;
+
+import java.time.LocalDateTime;
 
 @Getter
 @Setter
@@ -29,4 +28,5 @@ public class ChatMessageDto {
     @NotBlank
     private String content;
     private LocalDateTime createdAt;
+    private Long currentMusicId;
 }

@@ -1,9 +1,11 @@
 package com.lalala.auth.controller;
 
+import com.lalala.auth.payload.request.TokenRefreshRequest;
 import com.lalala.auth.service.AuthService;
 import com.lalala.response.BaseResponse;
 import lombok.RequiredArgsConstructor;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -17,6 +19,7 @@ import com.lalala.auth.payload.request.SignInRequest;
 import com.lalala.auth.payload.response.UserAndTokenResponse;
 import jakarta.servlet.http.HttpServletRequest;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/v1/api")
@@ -29,7 +32,7 @@ public class AuthController {
         return authService.signIn(request);
     }
 
-    @PostMapping("signout")
+    @PostMapping("/signout")
     public ResponseEntity<Boolean> signOutUser(HttpServletRequest request) {
         return authService.signOut(request);
     }
@@ -37,9 +40,14 @@ public class AuthController {
     @PostMapping("/passport")
     public BaseResponse<String> generatePassport(@RequestHeader("Authorization") String jwtPayload) {
         return BaseResponse.from(
-                HttpStatus.OK,
+                HttpStatus.OK.value(),
                 "패스포트를 발급했습니다.",
                 authService.generatePassport(jwtPayload)
         );
+    }
+
+    @PostMapping("/token-refresh")
+    public ResponseEntity<UserAndTokenResponse> accessTokenRefresh(@RequestBody TokenRefreshRequest request) {
+        return authService.accessTokenRefresh(request);
     }
 }
