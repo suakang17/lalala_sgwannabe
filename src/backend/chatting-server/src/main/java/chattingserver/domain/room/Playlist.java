@@ -21,7 +21,7 @@ public class Playlist {
     private List<Music> musics;
 
     public Music getFirstMusic() {
-        return musics.isEmpty() ? null : musics.get(0);
+        return musics.get(0);  // 무조건 있음 신뢰
     }
 
     public User getPlaylistOwner() {
@@ -32,10 +32,12 @@ public class Playlist {
                 .build();
     }
 
+
     public Duration getTotalPlaylistTime() {
-        return musics.stream()
+        return this.getMusics().stream()
                 .map(Music::getPlayTimeDuration)
                 .reduce(Duration.ZERO, Duration::plus);
     }
+
 
 }

@@ -31,116 +31,186 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-@Service
 @RequiredArgsConstructor
+@Slf4j
+@Service
 public class ChatMessageService {
+
+    private final ObjectMapper objectMapper;
     private final ChatMessageRepository chatMessageRepository;
     private final RoomRepository roomRepository;
-    private final EntityToResponseDtoConverter converter;
+    private final EntityToResponseDtoConverter entityToResponseDtoConverter;
 
-    private static final int PAGE_SIZE = 20;
 
-    public ChatMessageDto saveChatMessage(ChatMessageDto dto) {
-        ChatMessage message = ChatMessage.from(dto);
-        ChatMessage savedMessage = chatMessageRepository.save(message);
-        return converter.convertMessage(savedMessage);
+    private static final int SIZE = 20;
+
+    public <T> void sendMessage(WebSocketSession session, T message) {
+        try {
+            session.sendMessage(new TextMessage(objectMapper.writeValueAsString(message)));
+        } catch (IOException e) {
+            log.error(e.getMessage(), e);
+        }
+    }
+
+    public ChatMessageDto saveChatMessage(ChatMessageDto chatMessageDto) {
+
+        ChatMessage message = chatMessageRepository.save(ChatMessage.builder()
+                .messageType(chatMessageDto.getMessageType())
+                .roomId(chatMessageDto.getRoomId())
+                .senderId(chatMessageDto.getSenderId())
+                .nickName(chatMessageDto.getNickName())
+                .senderProfileImage(chatMessageDto.getSenderProfileImage())
+                .content(chatMessageDto.getContent())
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        log.info("메시지 저장 성공 message={}", message);
+
+        return entityToResponseDtoConverter.convertMessage(message);
     }
 
     public List<ChatMessageResponseDto> getNewMessages(String roomId, String readMsgId) {
-        return chatMessageRepository.getNewMessages(roomId, readMsgId).stream()
-                .map(converter::convertToResponseMessage)
-                .collect(Collectors.toList());
+        List<ChatMessage> messages = chatMessageRepository.getNewMessages(roomId, readMsgId);
+        log.info("신규 메시지 조회 성공 roomId={}, readMsgId={}, messages={}", roomId, readMsgId, messages);
+        return messages.stream().map(entityToResponseDtoConverter::convertToResponseMessage).collect(Collectors.toList());
     }
 
     public List<ChatMessageResponseDto> getAllMessagesAtRoom(String roomId) {
-        return chatMessageRepository.getAllMessagesAtRoom(roomId).stream()
-                .map(converter::convertToResponseMessage)
-                .collect(Collectors.toList());
+        return chatMessageRepository.getAllMessagesAtRoom(roomId).stream().map(entityToResponseDtoConverter::convertToResponseMessage).collect(Collectors.toList());
     }
 
     public Page<ChatMessageResponseDto> chatMessagePagination(String roomId, int page) {
-        return chatMessageRepository.findByRoomIdWithPagingAndFiltering(roomId, page, PAGE_SIZE)
-                .map(converter::convertToResponseMessage);
+        Page<ChatMessage> messagePage = chatMessageRepository.findByRoomIdWithPagingAndFiltering(roomId, page, SIZE);
+        log.info("특정 채팅방 메시지 페이지네이션 조회 성공 roomId={}", roomId);
+        return messagePage.map(entityToResponseDtoConverter::convertToResponseMessage);
+    }
+
+    public void deleteChat(String id) {
+        chatMessageRepository.deleteById(id);
     }
 
     @Transactional
-    public ChatMessageDto join(ChatMessageDto dto) {
-        Room room = getRoomOrThrow(dto.getRoomId());
-        ensureRoomCapacity(dto.getSenderId());
+    public ChatMessageDto join(ChatMessageDto chatMessageDto) {
 
-        ChatMessage message = createEntranceMessage(dto);
-        ChatMessage savedMessage = chatMessageRepository.save(message);
+        List<Room> roomList = roomRepository.findJoinedRoomsByUid(chatMessageDto.getSenderId());
+        if (roomList.size() == 4) {
+            log.info("참여 가능한 채팅방 수 초과. 가장 오래된 채팅방에서 퇴장합니다.");
+            String exitedRoomId = roomList.get(3).getId();
+            roomRepository.exitRoom(exitedRoomId, chatMessageDto.getSenderId());
+            log.info("가장 오래된 방 나가기 성공 uid={}, roomId={}", chatMessageDto.getSenderId(), exitedRoomId);
+        }
 
-        User joinedUser = createJoinedUser(dto, savedMessage.getId());
-        roomRepository.addUserToRoom(room.getId(), joinedUser);
+        try {
+            Optional<Room> optionalRoom = roomRepository.findById(chatMessageDto.getRoomId());
+            if (optionalRoom.isEmpty()) {
+                throw new BusinessException("존재하지 않는 채팅방입니다. 채팅방 id=" + chatMessageDto.getRoomId(), ErrorCode.UNKNOWN_ERROR);
+            }
 
-        ChatMessageDto resultDto = converter.convertMessage(savedMessage);
-        resultDto.setCurrentMusicId(getCurrentMusicId(room.getId()));
-        return resultDto;
-    }
 
-    private Room getRoomOrThrow(String roomId) {
-        return roomRepository.findById(roomId)
-                .orElseThrow(() -> new BusinessException("존재하지 않는 채팅방입니다. 채팅방 id=" + roomId, ErrorCode.UNKNOWN_ERROR));
-    }
+            Room room = optionalRoom.get();
 
-    private void ensureRoomCapacity(Long userId) {
-        List<Room> joinedRooms = roomRepository.findJoinedRoomsByUid(userId);
-        if (joinedRooms.size() == 4) {
-            String oldestRoomId = joinedRooms.get(3).getId();
-            roomRepository.exitRoom(oldestRoomId, userId);
+            ChatMessage message = chatMessageRepository.save(ChatMessage.builder()
+                    .messageType(MessageType.ENTRANCE)
+                    .roomId(chatMessageDto.getRoomId())
+                    .senderId(chatMessageDto.getSenderId())
+                    .nickName(chatMessageDto.getNickName())
+                    .content(chatMessageDto.getNickName() + "님이 입장하셨습니다.")
+                    .senderProfileImage(chatMessageDto.getSenderProfileImage())
+                    .createdAt(LocalDateTime.now())
+                    .build());
+
+            User joinedUser = User.builder()
+                    .uid(chatMessageDto.getSenderId())
+                    .nickName(chatMessageDto.getNickName())
+                    .profileImage(chatMessageDto.getSenderProfileImage())
+                    .enteredAt(LocalDateTime.now())
+                    .lastReadMessageId(message.getId())
+                    .build();
+
+            roomRepository.addUserToRoom(room.getId(), joinedUser);
+
+            ChatMessageDto chatMessageDto1 = entityToResponseDtoConverter.convertMessage(message);
+            chatMessageDto1.setCurrentMusicId(getCurrentMusicId(room.getId()));
+
+            log.info(chatMessageDto1.toString());
+            return chatMessageDto1;
+        } catch (Exception e) {
+            log.error("트랜잭션 오류: {}", e.getMessage());
+            // TODO 트랜잭션 롤백 또는 예외 처리 로직 추가
+            throw new RuntimeException("트랜잭션 오류 발생");
         }
     }
 
-    private ChatMessage createEntranceMessage(ChatMessageDto dto) {
-        return ChatMessage.builder()
+    public ChatMessageDto permanentLeaving(String roomId, UserEntranceRequestDto userDto) {
+
+        Optional<Room> optionalRoom = roomRepository.findById(roomId);
+        if (optionalRoom.isEmpty()) {
+            throw new BusinessException("존재하지 않는 채팅방입니다. 채팅방 id=" + roomId, ErrorCode.UNKNOWN_ERROR);
+        }
+
+        Room room = optionalRoom.get();
+        Optional<User> optionalUser = room.getUsers().stream().filter(u -> u.getUid().equals(userDto.getUid())).findAny();
+        if (optionalUser.isEmpty()) {
+            log.info("해당하는 유저가 없습니다. uId={}", userDto.getUid());
+            // TODO null처리
+            return null;
+        }
+
+        room.getUsers().remove(optionalUser.get());
+
+        ChatMessage chatMessage = ChatMessage.builder()
                 .messageType(MessageType.ENTRANCE)
-                .roomId(dto.getRoomId())
-                .senderId(dto.getSenderId())
-                .nickName(dto.getNickName())
-                .content(dto.getNickName() + "님이 입장하셨습니다.")
-                .senderProfileImage(dto.getSenderProfileImage())
+                .roomId(roomId)
+                .senderId(userDto.getUid())
+                .nickName(userDto.getNickName())
+                .senderProfileImage(userDto.getProfileImage())
+                .content(userDto.getNickName() + "님이 퇴장하셨습니다.")
                 .createdAt(LocalDateTime.now())
                 .build();
+
+        chatMessageRepository.save(chatMessage);
+
+        return entityToResponseDtoConverter.convertMessage(chatMessage);
+
+
     }
 
-    private User createJoinedUser(ChatMessageDto dto, String lastReadMessageId) {
-        return User.builder()
-                .uid(dto.getSenderId())
-                .nickName(dto.getNickName())
-                .profileImage(dto.getSenderProfileImage())
-                .enteredAt(LocalDateTime.now())
-                .lastReadMessageId(lastReadMessageId)
-                .build();
+    public List<ChatMessageResponseDto> getMessagesBefore(String roomId, String readMsgId) {
+        List<ChatMessage> messages = chatMessageRepository.findPreviousMessages(roomId, readMsgId, SIZE);
+        log.info("이전 메시지 조회 성공 roomId={}, readMsgId={}, messages={}", roomId, readMsgId, messages);
+        return messages.stream().map(entityToResponseDtoConverter::convertToResponseMessage).collect(Collectors.toList());
     }
 
     public Long getCurrentMusicId(String roomId) {
-        Room room = getRoomOrThrow(roomId);
+        Optional<Room> optionalRoom = roomRepository.findById(roomId);
+        if (optionalRoom.isEmpty()) {
+            throw new BusinessException("존재하지 않는 채팅방입니다.", ErrorCode.UNKNOWN_ERROR);
+        }
+
+        Room room = optionalRoom.get();
+
         Duration elapsedTime = Duration.between(room.getCreatedAt(), LocalDateTime.now());
+
         Duration totalPlaylistTime = room.getPlaylistDuration();
+
+        log.info("room={}", room);
+        log.info("elapsedTime={}", elapsedTime.toString());
+        log.info("totalPlaylistTime: playlist={}, playlistTime={}", room.getPlaylist().toString(), totalPlaylistTime);
 
         long currentPlaylistTimeInSeconds = elapsedTime.abs().getSeconds() % totalPlaylistTime.getSeconds();
 
-        return room.getPlaylist().getMusics().stream()
-                .reduce(new MusicAccumulator(Duration.ZERO, null),
-                        (acc, music) -> {
-                            acc.playlistTime = acc.playlistTime.plus(music.getPlayTimeDuration());
-                            if (acc.playlistTime.getSeconds() >= currentPlaylistTimeInSeconds && acc.musicId == null) {
-                                acc.musicId = music.getId();
-                            }
-                            return acc;
-                        },
-                        (acc1, acc2) -> acc1)
-                .musicId;
-    }
+        log.info("currentPlaylistTimeInSeconds={}", currentPlaylistTimeInSeconds);
 
-    private static class MusicAccumulator {
-        Duration playlistTime;
-        Long musicId;
-
-        MusicAccumulator(Duration playlistTime, Long musicId) {
-            this.playlistTime = playlistTime;
-            this.musicId = musicId;
+        Duration playlistTime = Duration.ZERO;
+        List<Music> playlist = room.getPlaylist().getMusics();
+        for (Music music : playlist) {
+            playlistTime = playlistTime.plus(music.getPlayTimeDuration());
+            if (playlistTime.getSeconds() >= currentPlaylistTimeInSeconds) {
+                log.info("music.getId()={}", music.getId());
+                return music.getId();
+            }
         }
+
+        throw new BusinessException("해당하는 음원이 없습니다.", ErrorCode.UNKNOWN_ERROR);
     }
 }

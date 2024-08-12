@@ -7,8 +7,14 @@ import java.util.Collection;
 import java.util.List;
 
 public interface ChatMessageRepositoryCustom {
-    List<ChatMessage> findMessagesNoOffset(String roomId, LocalDateTime lastMessageTime, int limit);
-    List<ChatMessage> getAllMessagesAtRoom(String roomId);
+
+    Page<ChatMessage> findByRoomIdWithPagingAndFiltering(String roomId, int page, int size);
+
+    Collection<ChatMessage> getAllMessagesAtRoom(String roomId);
+
     List<ChatMessage> getNewMessages(String roomId, String readMsgId);
+
+    ChatMessage getLastMessage(String roomId);
     List<ChatMessage> findPreviousMessages(String roomId, String readMsgId, int limit);
+
 }
