@@ -36,7 +36,7 @@ SG(스마일게이트)에서 목표를 이루고(워너비)야 말겠다는 포�
 </table>
 
 ## SG Wannabe 팀 링크
-
+- [시연 영상](https://drive.google.com/file/d/18fA2n5nd6JQwMdBA0yX6hYm4Mr8xQaZW/view?usp=drive_link)
 - [문서 Github](./docs/README.md)
 - [프로젝트 Github](./src/README.md)
 - [SG Wannbe 팀 노션](https://bright-jujube-a62.notion.site/1-eaa4ea47829e4df29edb794af100deaf)
