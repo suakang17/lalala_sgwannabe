@@ -22,7 +22,6 @@
 
 - [인증 서버](./auth-server/README.md) : [happysoy](https://www.github.com/happysoy)
 - [유저 서버](./user-server/README.md) : [happysoy](https://www.github.com/happysoy)
-- [피드 서버](./feed-server/README.md) : [happysoy](https://www.github.com/happysoy)
 - [채팅 서버](./chatting-server/README.md) : [suakang17](https://www.github.com/suakang17)
 - [검색 서버](./search-server/README.md) : [suakang17](https://www.github.com/suakang17)
 - [플레이 리스트 서버](./playlist-server/README.md) : [suakang17](https://www.github.com/suakang17)
